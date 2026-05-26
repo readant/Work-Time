@@ -1,0 +1,70 @@
+{
+  "name": "vscode-coding-tracker",
+  "displayName": "编码时间统计",
+  "description": "记录VS Code使用时长、有效编码时间、代码量和项目统计",
+  "version": "0.1.0",
+  "publisher": "readant",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/readant/Work-Time"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscode-coding-tracker.showStats",
+        "title": "显示编码统计",
+        "category": "编码时间统计"
+      },
+      {
+        "command": "vscode-coding-tracker.exportReport",
+        "title": "导出统计报告",
+        "category": "编码时间统计"
+      }
+    ],
+    "configuration": {
+      "title": "编码时间统计",
+      "properties": {
+        "codingTracker.idleTimeout": {
+          "type": "number",
+          "default": 300,
+          "description": "空闲检测超时（秒），超过此时间无操作视为离开"
+        },
+        "codingTracker.afkTimeout": {
+          "type": "number",
+          "default": 600,
+          "description": "离开超时（秒），超过此时间重置编码计时"
+        },
+        "codingTracker.dataDir": {
+          "type": "string",
+          "default": "",
+          "description": "数据存储目录，留空使用扩展全局存储路径"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.config.mjs --production",
+    "compile": "node esbuild.config.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "lint": "tsc --noEmit",
+    "package": "node esbuild.config.mjs --production && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
