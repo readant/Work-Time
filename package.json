@@ -1,7 +1,7 @@
 {
-  "name": "vscode-coding-tracker",
-  "displayName": "编码时间统计",
-  "description": "记录VS Code使用时长、有效编码时间、代码量和项目统计",
+  "name": "work-time",
+  "displayName": "Work Time",
+  "description": "Track VS Code usage, effective coding time, keystrokes, code changes and project statistics",
   "version": "0.1.0",
   "publisher": "readant",
   "license": "MIT",
@@ -22,30 +22,30 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-coding-tracker.showStats",
+        "command": "work-time.showStats",
         "title": "显示编码统计",
-        "category": "编码时间统计"
+        "category": "Work Time"
       },
       {
-        "command": "vscode-coding-tracker.exportReport",
+        "command": "work-time.exportReport",
         "title": "导出统计报告",
-        "category": "编码时间统计"
+        "category": "Work Time"
       }
     ],
     "configuration": {
-      "title": "编码时间统计",
+      "title": "Work Time",
       "properties": {
-        "codingTracker.idleTimeout": {
+        "workTime.idleTimeout": {
           "type": "number",
           "default": 300,
           "description": "空闲检测超时（秒），超过此时间无操作视为离开"
         },
-        "codingTracker.afkTimeout": {
+        "workTime.afkTimeout": {
           "type": "number",
           "default": 600,
           "description": "离开超时（秒），超过此时间重置编码计时"
         },
-        "codingTracker.dataDir": {
+        "workTime.dataDir": {
           "type": "string",
           "default": "",
           "description": "数据存储目录，留空使用扩展全局存储路径"

@@ -21,7 +21,7 @@ let statusBarItem: vscode.StatusBarItem;
 export async function activate(
     context: vscode.ExtensionContext
 ): Promise<void> {
-    console.log('"编码时间统计" 扩展已激活');
+    console.log('[work-time] 扩展已激活');
 
     storage = new Storage();
     storage.init(context);
@@ -36,7 +36,7 @@ export async function activate(
         vscode.StatusBarAlignment.Right,
         100
     );
-    statusBarItem.command = 'vscode-coding-tracker.showStats';
+    statusBarItem.command = 'work-time.showStats';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
@@ -49,16 +49,16 @@ export async function activate(
     // 注册命令
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            'vscode-coding-tracker.showStats',
+            'work-time.showStats',
             () => handleShowStats(context.extensionUri, 'today')
         ),
         vscode.commands.registerCommand(
-            'vscode-coding-tracker.webviewSwitchView',
+            'work-time.webviewSwitchView',
             (view: ViewType) =>
                 handleShowStats(context.extensionUri, view)
         ),
         vscode.commands.registerCommand(
-            'vscode-coding-tracker.exportReport',
+            'work-time.exportReport',
             handleExportReport
         )
     );
@@ -72,7 +72,7 @@ export async function deactivate(): Promise<void> {
         await tracker.stop();
     }
     webview.dispose();
-    console.log('"编码时间统计" 扩展已停用');
+    console.log('[work-time] 扩展已停用');
 }
 
 // ============ 命令处理 ============
@@ -159,7 +159,7 @@ async function prepareWebviewData(view: ViewType) {
         case 'today': {
             dataPoints = Reporter.toDataPoints([todayStats]);
             // 自适应提示
-            const cfg = vscode.workspace.getConfiguration('codingTracker');
+            const cfg = vscode.workspace.getConfiguration('workTime');
             const idle = cfg.get<number>('idleTimeout', 300);
             adaptiveNote =
                 `当前空闲阈值: ${idle}s (${Math.round(idle / 60)} 分钟)`;

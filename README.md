@@ -1,4 +1,4 @@
-# 编码时间统计 (Work Time)
+# Work Time
 
 VS Code 扩展，自动追踪编辑器使用时长、有效编码时间、按键次数、代码行变更和 Git 提交记录，并在 Webview 面板中提供可视化统计。
 
@@ -127,7 +127,7 @@ npm run package    # 生成 .vsix 安装包
 ### 从 VSIX 安装
 
 ```bash
-code --install-extension readant.vscode-coding-tracker-0.1.0.vsix
+code --install-extension work-time-0.1.0.vsix
 ```
 
 或通过 VS Code 扩展面板 → "从 VSIX 安装"。
@@ -166,13 +166,13 @@ code --install-extension readant.vscode-coding-tracker-0.1.0.vsix
 
 ## 配置项
 
-在 VS Code 设置中搜索 `codingTracker` 可调整：
+在 VS Code 设置中搜索 `workTime` 可调整：
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
-| `codingTracker.idleTimeout` | number | 300 | 空闲检测阈值（秒），无操作超过此时间进入 idle 状态 |
-| `codingTracker.afkTimeout` | number | 600 | 离开检测阈值（秒），无操作超过此时间进入 away 状态，停止计时 |
-| `codingTracker.dataDir` | string | "" | 自定义数据存储目录，留空使用 VS Code 全局存储路径 |
+| `workTime.idleTimeout` | number | 300 | 空闲检测阈值（秒），无操作超过此时间进入 idle 状态 |
+| `workTime.afkTimeout` | number | 600 | 离开检测阈值（秒），无操作超过此时间进入 away 状态，停止计时 |
+| `workTime.dataDir` | string | "" | 自定义数据存储目录，留空使用 VS Code 全局存储路径 |
 
 > **注意**：启用自适应阈值后，`idleTimeout` 和 `afkTimeout` 会被算法自动调整。如需固定阈值，可将阈值设为极值（如 9999 秒）来禁用自适应效果。
 

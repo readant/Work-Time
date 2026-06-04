@@ -7,13 +7,14 @@ import { DailyStats, DateRange, GlobalStats } from './types';
  */
 export class Storage {
     private basePath: vscode.Uri | null = null;
+    private dirEnsured = false;
 
     /**
      * 初始化存储路径。需在 activate 中调用一次。
      */
     init(context: vscode.ExtensionContext): void {
         const customDir = vscode.workspace
-            .getConfiguration('codingTracker')
+            .getConfiguration('workTime')
             .get<string>('dataDir', '');
         if (customDir) {
             this.basePath = vscode.Uri.file(customDir);
@@ -43,8 +44,11 @@ export class Storage {
      */
     async saveDay(stats: DailyStats): Promise<void> {
         const uri = this.dayUri(stats.date);
-        const dir = vscode.Uri.joinPath(uri, '..');
-        await vscode.workspace.fs.createDirectory(dir);
+        if (!this.dirEnsured) {
+            const dir = vscode.Uri.joinPath(uri, '..');
+            await vscode.workspace.fs.createDirectory(dir);
+            this.dirEnsured = true;
+        }
         const data = Buffer.from(JSON.stringify(stats, null, 2), 'utf-8');
         await vscode.workspace.fs.writeFile(uri, data);
     }
@@ -201,10 +205,11 @@ export class Storage {
     }
 }
 
-/** 格式化 Date 为 YYYY-MM-DD。 */
+/** 格式化 Date 为 YYYY-MM-DD（UTC+8，与 tracker 层一致）。 */
 function fmtDate(d: Date): string {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
+    const tz = new Date(d.getTime() + 8 * 3600_000);
+    const y = tz.getUTCFullYear();
+    const m = String(tz.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(tz.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
 }

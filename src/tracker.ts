@@ -36,11 +36,10 @@ export class CodingTracker {
     private lastActivityTime: number = Date.now();
     private tickTimer: ReturnType<typeof setInterval> | null = null;
     private saveTimer: ReturnType<typeof setInterval> | null = null;
-    private gitPollTimer: ReturnType<typeof setInterval> | null = null;
     private today: string = todayString();
     private todayStats!: DailyStats;
 
-    private currentProject = '';
+    private currentProject: string | null = null;
     private currentFile = '';
 
     private idleTimeout = 300;
@@ -62,7 +61,7 @@ export class CodingTracker {
 
         this.disposables.push(
             vscode.workspace.onDidChangeConfiguration((e) => {
-                if (e.affectsConfiguration('codingTracker')) {
+                if (e.affectsConfiguration('workTime')) {
                     this.reloadConfig();
                 }
             })
@@ -197,7 +196,7 @@ export class CodingTracker {
                         project: this.projectNameFromPath(repoPath),
                     };
                     this.todayStats.commits.push(record);
-                    console.log(`[coding-tracker] commit: ${c.hash.slice(0, 7)} ${record.message}`);
+                    console.log(`[work-time] commit: ${c.hash.slice(0, 7)} ${record.message}`);
                 }
             } catch {
                 // 静默失败
@@ -235,14 +234,19 @@ export class CodingTracker {
         }
     }
 
-    private onTick(): void {
+    private async onTick(): Promise<void> {
         const now = Date.now();
 
-        // 跨日检测
+        // 跨日检测：先取快照再异步保存，避免数据竞态
         const day = todayString();
         if (day !== this.today) {
-            this.saveToday();
+            const snapshot = this.todayStats;
             this.today = day;
+            try {
+                await this.storage.saveDay(snapshot);
+            } catch {
+                console.warn('[work-time] 保存昨日数据失败');
+            }
             this.adaptive.tryApply(day);
             this.todayStats = {
                 date: day,
@@ -342,7 +346,7 @@ export class CodingTracker {
         try {
             await this.storage.saveDay(this.todayStats);
         } catch {
-            // 静默失败
+            console.warn('[work-time] 保存今日数据失败');
         }
     }
 
@@ -352,14 +356,14 @@ export class CodingTracker {
         if (this.state === newState) return;
         const old = this.state;
         this.state = newState;
-        console.log(`[coding-tracker] ${old} → ${newState}`);
+        console.log(`[work-time] ${old} → ${newState}`);
     }
 
     // ============ 环境和配置 ============
 
     private updateProject(): void {
         const folder = vscode.workspace.workspaceFolders?.[0];
-        this.currentProject = folder?.name ?? '';
+        this.currentProject = folder?.name ?? null;
     }
 
     private updateFile(): void {
@@ -375,7 +379,7 @@ export class CodingTracker {
     }
 
     private reloadConfig(): void {
-        const cfg = vscode.workspace.getConfiguration('codingTracker');
+        const cfg = vscode.workspace.getConfiguration('workTime');
         this.idleTimeout = Math.max(10, cfg.get<number>('idleTimeout', 300));
         this.afkTimeout = Math.max(
             this.idleTimeout + 10,
@@ -391,10 +395,6 @@ export class CodingTracker {
         if (this.saveTimer) {
             clearInterval(this.saveTimer);
             this.saveTimer = null;
-        }
-        if (this.gitPollTimer) {
-            clearInterval(this.gitPollTimer);
-            this.gitPollTimer = null;
         }
     }
 

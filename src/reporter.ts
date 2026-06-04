@@ -75,7 +75,7 @@ export class Reporter {
         };
 
         const lines: string[] = [];
-        lines.push('# 编码时间统计报告');
+        lines.push('# Work Time 统计报告');
         lines.push('');
         lines.push(`> 导出时间：${new Date().toLocaleString('zh-CN')}`);
         lines.push('');
@@ -140,7 +140,7 @@ export class Reporter {
         };
 
         const lines: string[] = [];
-        lines.push('========== 编码时间统计报告 ==========');
+        lines.push('========== Work Time 统计报告 ==========');
         lines.push(`导出时间: ${new Date().toLocaleString('zh-CN')}`);
         lines.push(`统计天数: ${summary.totalDays}`);
         lines.push(`总活跃时间: ${timeFmt(summary.totalActiveTime)}`);

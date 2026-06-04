@@ -48,7 +48,7 @@ export class AdaptiveThreshold {
 
         const afkSec = idleSec * AdaptiveThreshold.AFK_MULTIPLIER;
 
-        const cfg = vscode.workspace.getConfiguration('codingTracker');
+        const cfg = vscode.workspace.getConfiguration('workTime');
         const currentIdle = cfg.get<number>('idleTimeout', 300);
 
         // 只在变化超过 30 秒时才更新，避免频繁波动

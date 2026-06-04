@@ -39,8 +39,8 @@ export class StatsWebview {
         }
 
         this.panel = vscode.window.createWebviewPanel(
-            'codingStats',
-            '编码时间统计',
+            'workTime',
+            'Work Time',
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -60,7 +60,7 @@ export class StatsWebview {
                 if (msg.type === 'switchView' && msg.view) {
                     // 通知扩展重新加载该视图的数据
                     vscode.commands.executeCommand(
-                        'vscode-coding-tracker.webviewSwitchView',
+                        'work-time.webviewSwitchView',
                         msg.view
                     );
                 }
@@ -117,7 +117,7 @@ export class StatsWebview {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
-<title>编码时间统计</title>
+<title>Work Time</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
