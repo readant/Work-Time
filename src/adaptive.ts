@@ -71,6 +71,13 @@ export class AdaptiveThreshold {
         this.lastApplyDate = '';
     }
 
+    /**
+     * 获取当前滑动窗口的快照（仅供外部分析，如智能番茄钟推荐）。
+     */
+    getIntervals(): number[] {
+        return [...this.intervals];
+    }
+
     // ---- 内部 ----
 
     /** 计算第 90 百分位数。 */

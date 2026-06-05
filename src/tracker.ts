@@ -132,6 +132,11 @@ export class CodingTracker {
         return this.state;
     }
 
+    /** 暴露活动间隔快照，供外部（如番茄钟）做智能推荐。 */
+    getIntervalsSnapshot(): number[] {
+        return this.adaptive.getIntervals();
+    }
+
     getTodayStats(): Readonly<DailyStats> {
         return this.todayStats;
     }

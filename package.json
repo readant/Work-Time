@@ -30,8 +30,94 @@
         "command": "work-time.exportReport",
         "title": "导出统计报告",
         "category": "Work Time"
+      },
+      {
+        "command": "work-time.pomodoroStart",
+        "title": "Start Pomodoro",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.pomodoroTogglePause",
+        "title": "Pause/Resume Pomodoro",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.pomodoroStop",
+        "title": "Stop Pomodoro",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.pomodoroSkipBreak",
+        "title": "Skip Break",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.pomodoroConfigure",
+        "title": "Configure Pomodoro",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.sessionStart",
+        "title": "⏱️ 开始计时",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.sessionTogglePause",
+        "title": "Pause/Resume Session",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.sessionStop",
+        "title": "Stop Session",
+        "category": "Work Time"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "work-time.sessionStart",
+          "when": "resourceScheme == file && !explorerResourceIsFolder && !workTime.sessionActive",
+          "group": "6_copypath@7"
+        },
+        {
+          "command": "work-time.sessionTogglePause",
+          "when": "resourceScheme == file && workTime.sessionActive",
+          "group": "6_copypath@7"
+        },
+        {
+          "command": "work-time.sessionStop",
+          "when": "resourceScheme == file && workTime.sessionActive",
+          "group": "6_copypath@8"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "work-time.sessionStart",
+          "when": "resourceScheme == file && !workTime.sessionActive",
+          "group": "6_copypath@7"
+        },
+        {
+          "command": "work-time.sessionTogglePause",
+          "when": "resourceScheme == file && workTime.sessionActive",
+          "group": "6_copypath@7"
+        },
+        {
+          "command": "work-time.sessionStop",
+          "when": "resourceScheme == file && workTime.sessionActive",
+          "group": "6_copypath@8"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "work-time.sessionTogglePause",
+          "when": "workTime.sessionActive"
+        },
+        {
+          "command": "work-time.sessionStop",
+          "when": "workTime.sessionActive"
+        }
+      ]
+    },
     "configuration": {
       "title": "Work Time",
       "properties": {
@@ -49,6 +135,41 @@
           "type": "string",
           "default": "",
           "description": "数据存储目录，留空使用扩展全局存储路径"
+        },
+        "workTime.pomodoro.focusDuration": {
+          "type": "number",
+          "default": 1500,
+          "description": "专注时长（秒），默认 1500 = 25 分钟"
+        },
+        "workTime.pomodoro.shortBreakDuration": {
+          "type": "number",
+          "default": 300,
+          "description": "短休息时长（秒），默认 300 = 5 分钟"
+        },
+        "workTime.pomodoro.longBreakDuration": {
+          "type": "number",
+          "default": 900,
+          "description": "长休息时长（秒），默认 900 = 15 分钟"
+        },
+        "workTime.pomodoro.longBreakInterval": {
+          "type": "number",
+          "default": 4,
+          "description": "几次专注后进入长休息"
+        },
+        "workTime.pomodoro.autoStartBreak": {
+          "type": "boolean",
+          "default": false,
+          "description": "专注结束时是否自动开始休息"
+        },
+        "workTime.pomodoro.autoStartFocus": {
+          "type": "boolean",
+          "default": false,
+          "description": "休息结束时是否自动开始下一轮专注"
+        },
+        "workTime.pomodoro.enableSmartRecommend": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用在自适应阈值基础上智能推荐专注时长"
         }
       }
     }

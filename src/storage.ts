@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { DailyStats, DateRange, GlobalStats } from './types';
+import { DailyStats, DateRange, GlobalStats, SessionRecord } from './types';
 
 /**
  * 数据持久化模块。
@@ -7,7 +7,9 @@ import { DailyStats, DateRange, GlobalStats } from './types';
  */
 export class Storage {
     private basePath: vscode.Uri | null = null;
+    private sessionBasePath: vscode.Uri | null = null;
     private dirEnsured = false;
+    private sessionDirEnsured = false;
 
     /**
      * 初始化存储路径。需在 activate 中调用一次。
@@ -18,10 +20,15 @@ export class Storage {
             .get<string>('dataDir', '');
         if (customDir) {
             this.basePath = vscode.Uri.file(customDir);
+            this.sessionBasePath = vscode.Uri.file(customDir + '/sessions');
         } else {
             this.basePath = vscode.Uri.joinPath(
                 context.globalStorageUri,
                 'stats'
+            );
+            this.sessionBasePath = vscode.Uri.joinPath(
+                context.globalStorageUri,
+                'sessions'
             );
         }
     }
@@ -185,10 +192,64 @@ export class Storage {
         };
     }
 
+    // ---- 会话记录存储 ----
+
+    /**
+     * 读取指定日期的所有会话记录，不存在时返回空数组。
+     */
+    async loadSessions(date: string): Promise<SessionRecord[]> {
+        const uri = this.sessionDayUri(date);
+        try {
+            const raw = await vscode.workspace.fs.readFile(uri);
+            return JSON.parse(Buffer.from(raw).toString('utf-8')) as SessionRecord[];
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * 追加一条会话记录到对应日期文件。
+     */
+    async addSession(record: SessionRecord): Promise<void> {
+        const date = dateFromTimestamp(record.startTime);
+        const uri = this.sessionDayUri(date);
+        if (!this.sessionDirEnsured) {
+            const dir = vscode.Uri.joinPath(uri, '..');
+            await vscode.workspace.fs.createDirectory(dir);
+            this.sessionDirEnsured = true;
+        }
+        const existing = await this.loadSessions(date);
+        existing.push(record);
+        const data = Buffer.from(JSON.stringify(existing, null, 2), 'utf-8');
+        await vscode.workspace.fs.writeFile(uri, data);
+    }
+
+    /**
+     * 列出所有有会话记录的日期。
+     */
+    async listSessionDays(): Promise<string[]> {
+        if (!this.sessionBasePath) return [];
+        try {
+            const entries = await vscode.workspace.fs.readDirectory(
+                this.sessionBasePath
+            );
+            return entries
+                .filter(([name]) => name.endsWith('.json'))
+                .map(([name]) => name.replace('.json', ''))
+                .sort();
+        } catch {
+            return [];
+        }
+    }
+
     // ---- 内部工具 ----
 
     private dayUri(date: string): vscode.Uri {
         return vscode.Uri.joinPath(this.basePath!, `${date}.json`);
+    }
+
+    private sessionDayUri(date: string): vscode.Uri {
+        return vscode.Uri.joinPath(this.sessionBasePath!, `${date}.json`);
     }
 
     private emptyDay(date: string): DailyStats {
@@ -212,4 +273,9 @@ function fmtDate(d: Date): string {
     const m = String(tz.getUTCMonth() + 1).padStart(2, '0');
     const day = String(tz.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+}
+
+/** 从时间戳提取 YYYY-MM-DD 日期（UTC+8）。 */
+function dateFromTimestamp(ts: number): string {
+    return fmtDate(new Date(ts));
 }

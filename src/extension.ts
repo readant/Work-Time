@@ -3,9 +3,13 @@ import { Storage } from './storage';
 import { CodingTracker } from './tracker';
 import { StatsWebview } from './webview';
 import { Reporter } from './reporter';
+import { SmartPomodoro } from './tools/pomodoro';
+import { SessionTimer } from './tools/session-timer';
 import {
     DayDataPoint,
     ExportFormat,
+    PomodoroPhase,
+    SessionTimerState,
     TrackerState,
     ViewType,
 } from './types';
@@ -14,6 +18,8 @@ let storage: Storage;
 let tracker: CodingTracker;
 let webview: StatsWebview;
 let statusBarItem: vscode.StatusBarItem;
+let pomodoro: SmartPomodoro;
+let sessionTimer: SessionTimer;
 
 /**
  * 扩展激活时调用，VS Code 启动完成后触发（onStartupFinished）。
@@ -31,6 +37,11 @@ export async function activate(
 
     webview = new StatsWebview();
 
+    // 智能番茄钟 & 文件计时器
+    pomodoro = new SmartPomodoro(tracker);
+    sessionTimer = new SessionTimer(tracker, storage);
+    sessionTimer.registerEditorListener();
+
     // 状态栏
     statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right,
@@ -46,7 +57,7 @@ export async function activate(
     });
     updateStatusBar();
 
-    // 注册命令
+    // 注册命令（原有 + 番茄钟 + 会话计时器）
     context.subscriptions.push(
         vscode.commands.registerCommand(
             'work-time.showStats',
@@ -60,7 +71,94 @@ export async function activate(
         vscode.commands.registerCommand(
             'work-time.exportReport',
             handleExportReport
-        )
+        ),
+
+        // ---- 番茄钟命令 ----
+        vscode.commands.registerCommand(
+            'work-time.pomodoroStart',
+            () => pomodoro.start()
+        ),
+        vscode.commands.registerCommand(
+            'work-time.pomodoroTogglePause',
+            () => {
+                if (pomodoro.getPhase() === PomodoroPhase.Idle) {
+                    // idle 状态：尝试恢复（之前暂停的），否则启动
+                    if (pomodoro.getRemaining() > 0) {
+                        pomodoro.resume();
+                    } else {
+                        pomodoro.start();
+                    }
+                } else {
+                    pomodoro.pause();
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'work-time.pomodoroStop',
+            () => pomodoro.stop()
+        ),
+        vscode.commands.registerCommand(
+            'work-time.pomodoroSkipBreak',
+            () => pomodoro.skipBreak()
+        ),
+        vscode.commands.registerCommand(
+            'work-time.pomodoroConfigure',
+            () =>
+                vscode.commands.executeCommand(
+                    'workbench.action.openSettings',
+                    'workTime.pomodoro'
+                )
+        ),
+
+        // ---- 会话计时器命令 ----
+        vscode.commands.registerCommand(
+            'work-time.sessionStart',
+            async (uri?: vscode.Uri) => {
+                let filePath: string;
+                if (uri) {
+                    filePath = vscode.workspace.asRelativePath(uri, false);
+                } else {
+                    const editor = vscode.window.activeTextEditor;
+                    if (!editor) {
+                        vscode.window.showWarningMessage(
+                            '没有打开的文件，请右键文件选择"开始计时"'
+                        );
+                        return;
+                    }
+                    filePath = vscode.workspace.asRelativePath(
+                        editor.document.uri,
+                        false
+                    );
+                }
+                await sessionTimer.start(filePath);
+            }
+        ),
+        vscode.commands.registerCommand(
+            'work-time.sessionTogglePause',
+            () => {
+                const s = sessionTimer.getState();
+                if (s === SessionTimerState.Paused) {
+                    sessionTimer.resume();
+                } else if (s === SessionTimerState.Running) {
+                    sessionTimer.pause();
+                }
+            }
+        ),
+        vscode.commands.registerCommand(
+            'work-time.sessionStop',
+            async () => {
+                const record = await sessionTimer.stop();
+                const m = Math.floor(record.duration / 60);
+                const s = record.duration % 60;
+                vscode.window.showInformationMessage(
+                    `⏱️ 会话已保存: ${record.fileName} — ${m}m ${s}s`
+                );
+            }
+        ),
+
+        // 番茄钟和会话计时器的状态栏项
+        pomodoro.statusBarItem,
+        sessionTimer.statusBarItem
     );
 }
 
@@ -71,6 +169,9 @@ export async function deactivate(): Promise<void> {
     if (tracker) {
         await tracker.stop();
     }
+    // 番茄钟和会话计时器在 dispose 时自动保存/清理
+    pomodoro?.dispose();
+    sessionTimer?.dispose();
     webview.dispose();
     console.log('[work-time] 扩展已停用');
 }
