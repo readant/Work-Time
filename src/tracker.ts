@@ -41,6 +41,7 @@ export class CodingTracker {
 
     private currentProject: string | null = null;
     private currentFile = '';
+    private currentLanguage = '';
 
     private idleTimeout = 300;
     private afkTimeout = 600;
@@ -262,6 +263,7 @@ export class CodingTracker {
                 totalLinesDeleted: 0,
                 commits: [],
                 projects: {},
+                languages: {},
             };
         }
 
@@ -308,6 +310,10 @@ export class CodingTracker {
                     file.codingTime++;
                 }
             }
+            if (this.currentLanguage) {
+                const lang = this.ensureLanguage(this.currentLanguage);
+                lang.codingTime++;
+            }
         }
         if (active && this.currentProject) {
             const proj = this.ensureProject(this.currentProject);
@@ -343,6 +349,14 @@ export class CodingTracker {
         this.todayStats.totalKeystrokes += keystrokes;
         this.todayStats.totalLinesAdded += linesAdded;
         this.todayStats.totalLinesDeleted += linesDeleted;
+
+        // 语言统计
+        if (this.currentLanguage) {
+            const lang = this.ensureLanguage(this.currentLanguage);
+            lang.keystrokes += keystrokes;
+            lang.linesAdded += linesAdded;
+            lang.linesDeleted += linesDeleted;
+        }
     }
 
     // ============ 持久化 ============
@@ -378,8 +392,10 @@ export class CodingTracker {
                 editor.document.uri,
                 false
             );
+            this.currentLanguage = editor.document.languageId;
         } else {
             this.currentFile = '';
+            this.currentLanguage = '';
         }
     }
 
@@ -432,5 +448,17 @@ export class CodingTracker {
             };
         }
         return proj.files[path];
+    }
+
+    private ensureLanguage(lang: string): FileDailyStats {
+        if (!this.todayStats.languages[lang]) {
+            this.todayStats.languages[lang] = {
+                codingTime: 0,
+                keystrokes: 0,
+                linesAdded: 0,
+                linesDeleted: 0,
+            };
+        }
+        return this.todayStats.languages[lang];
     }
 }

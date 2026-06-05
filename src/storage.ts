@@ -102,6 +102,7 @@ export class Storage {
             { time: number; lines: number }
         >();
         const fileMap = new Map<string, { time: number; lines: number }>();
+        const langMap = new Map<string, { time: number; lines: number }>();
 
         let totalActiveTime = 0;
         let totalCodingTime = 0;
@@ -134,6 +135,13 @@ export class Storage {
                     fileMap.set(file, fc);
                 }
             }
+
+            for (const [lang, l] of Object.entries(day.languages ?? {})) {
+                const lc = langMap.get(lang) ?? { time: 0, lines: 0 };
+                lc.time += l.codingTime;
+                lc.lines += l.linesAdded + l.linesDeleted;
+                langMap.set(lang, lc);
+            }
         }
 
         const topProjects = [...projectMap.entries()]
@@ -143,6 +151,11 @@ export class Storage {
 
         const topFiles = [...fileMap.entries()]
             .map(([path, v]) => ({ path, time: v.time }))
+            .sort((a, b) => b.time - a.time)
+            .slice(0, 10);
+
+        const topLanguages = [...langMap.entries()]
+            .map(([name, v]) => ({ name, time: v.time }))
             .sort((a, b) => b.time - a.time)
             .slice(0, 10);
 
@@ -156,6 +169,7 @@ export class Storage {
             totalCommits,
             topProjects,
             topFiles,
+            topLanguages,
         };
     }
 
@@ -262,6 +276,7 @@ export class Storage {
             totalLinesDeleted: 0,
             commits: [],
             projects: {},
+            languages: {},
         };
     }
 }

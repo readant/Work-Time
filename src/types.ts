@@ -64,6 +64,8 @@ export interface DailyStats {
     commits: CommitRecord[];
     /** 项目级明细 */
     projects: Record<string, ProjectDailyStats>;
+    /** 语言级明细（key = languageId，如 typescript/python） */
+    languages: Record<string, FileDailyStats>;
 }
 
 /**
@@ -79,6 +81,7 @@ export interface GlobalStats {
     totalCommits: number;
     topProjects: Array<{ name: string; time: number }>;
     topFiles: Array<{ path: string; time: number }>;
+    topLanguages: Array<{ name: string; time: number }>;
 }
 
 /**
@@ -124,7 +127,7 @@ export type ExportFormat = 'txt' | 'json' | 'csv' | 'md';
 /**
  * 显示视图类型。
  */
-export type ViewType = 'today' | 'week' | 'month' | 'all';
+export type ViewType = 'today' | 'week' | 'month' | 'all' | 'sessions';
 
 // ========== 智能番茄钟 ==========
 

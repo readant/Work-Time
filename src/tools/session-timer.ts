@@ -234,13 +234,13 @@ export class SessionTimer {
             this.statusBarItem.backgroundColor = new vscode.ThemeColor(
                 'statusBarItem.prominentBackground'
             );
-            this.statusBarItem.tooltip = `计时中: ${this.filePath}\n已用 ${time}`;
+            this.statusBarItem.tooltip = `计时中: ${this.filePath}\n已用时 ${time}`;
         } else if (this.state === SessionTimerState.Paused) {
             this.statusBarItem.text = `$(debug-pause) ${this.fileName} ${time}`;
             this.statusBarItem.backgroundColor = new vscode.ThemeColor(
                 'statusBarItem.warningBackground'
             );
-            this.statusBarItem.tooltip = `已暂停: ${this.filePath}\n已用 ${time}`;
+            this.statusBarItem.tooltip = `已暂停: ${this.filePath}\n已用时 ${time}`;
         }
     }
 

@@ -5,9 +5,9 @@ import { TrackerState } from '../types';
 
 /** 用 Unicode block 字符画进度条：█████░░░░░ */
 function progressBar(pct: number): string {
-    const w = 6;
+    const w = 8;
     const filled = Math.round(Math.max(0, Math.min(1, pct)) * w);
-    return '█'.repeat(filled) + '░'.repeat(w - filled);
+    return '▐'.repeat(filled) + '░'.repeat(w - filled);
 }
 
 /**
@@ -36,7 +36,7 @@ export class SmartPomodoro {
             102
         );
         this.statusBarItem.command = 'work-time.pomodoroTogglePause';
-        this.statusBarItem.text = '$(target) Start';
+        this.statusBarItem.text = '$(target) 开始';
         this.statusBarItem.tooltip = '点击启动番茄钟';
         this.statusBarItem.show();
         this.reloadConfig();
@@ -90,7 +90,7 @@ export class SmartPomodoro {
         this.phase = PomodoroPhase.Idle;
         this.autoStopped = false; // 手动暂停，不会自动恢复
         this.stopTicking();
-        this.statusBarItem.text = '$(debug-pause) Paused';
+        this.statusBarItem.text = '$(debug-pause) 已暂停';
         this.setContext(false);
         console.log('[work-time] pomodoro paused');
     }
@@ -237,7 +237,7 @@ export class SmartPomodoro {
                                 this.tick();
                             } else {
                                 this.phase = PomodoroPhase.Idle;
-                                this.statusBarItem.text = '$(debug-pause) Break skipped';
+                                this.statusBarItem.text = '$(debug-pause) 跳过休息';
                             }
                         }
                     );

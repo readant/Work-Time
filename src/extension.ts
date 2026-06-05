@@ -9,6 +9,7 @@ import {
     DayDataPoint,
     ExportFormat,
     PomodoroPhase,
+    SessionRecord,
     SessionTimerState,
     TrackerState,
     ViewType,
@@ -299,6 +300,30 @@ async function prepareWebviewData(view: ViewType) {
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
+        case 'sessions': {
+            // 加载最近 14 天的会话记录
+            const sDays = await storage.listSessionDays();
+            const recent = sDays.slice(-14);
+            const records: SessionRecord[] = [];
+            for (const d of recent) {
+                records.push(...(await storage.loadSessions(d)));
+            }
+            records.sort((a, b) => b.startTime - a.startTime);
+            summary = await storage.summarize(
+                (await storage.listDays()).slice(-30)
+            );
+            return {
+                view,
+                state,
+                todayStats,
+                summary,
+                dataPoints,
+                commits,
+                adaptiveNote,
+                theme: getThemeInfo(),
+                sessionRecords: records,
+            };
+        }
     }
 
     return {
@@ -309,6 +334,16 @@ async function prepareWebviewData(view: ViewType) {
         dataPoints,
         commits,
         adaptiveNote,
+        theme: getThemeInfo(),
+    };
+}
+
+/** 获取当前 VS Code 主题信息 */
+function getThemeInfo() {
+    const t = vscode.window.activeColorTheme;
+    return {
+        kind: t.kind, // 1=Light 2=Dark 3=HighContrast
+        isDark: t.kind === 2,
     };
 }
 
