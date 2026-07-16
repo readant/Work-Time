@@ -37,11 +37,13 @@ lastActivityTime ──┬── < idleTimeout ──→ Active  （计入 activ
 ```
 
 **活动事件触发器：**
+
 - `onDidChangeTextDocument` — 编辑文档
 - `onDidChangeActiveTextEditor` — 切换编辑器标签
 - `onDidChangeWindowState` — 窗口聚焦/失焦
 
 **行数统计原理：**
+
 - 监听 `onDidChangeTextDocument`
 - 解析每个 `contentChanges` 的 `range` 和 `text`
 - `linesDeleted = range.end.line - range.start.line`
@@ -49,6 +51,7 @@ lastActivityTime ──┬── < idleTimeout ──→ Active  （计入 activ
 - 按键次数 = `max(1, text.length)`，每个 change 至少计 1 次
 
 **Git 集成原理：**
+
 - 通过 `vscode.extensions.getExtension('vscode.git')` 获取 VS Code 内置 Git 扩展的 API
 - 遍历 `api.repositories`，记录每个仓库的初始 HEAD commit
 - 监听 `repo.state.onDidChange`，检测 HEAD 变化
@@ -82,6 +85,7 @@ globalStorage/
 6. `afkTimeout` 自动设为 `idleTimeout × 2`
 
 **配置边界：**
+
 - 最小 idleTimeout：60 秒
 - 最大 idleTimeout：900 秒（15 分钟）
 

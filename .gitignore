@@ -27,3 +27,7 @@ Thumbs.db
 
 # 其他
 .deepseek
+.mimocode
+
+# 导出报告
+coding-report.json

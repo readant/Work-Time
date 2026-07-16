@@ -34,16 +34,21 @@ export class Storage {
     }
 
     /**
-     * 读取指定日期的统计，不存在时返回空对象。
+     * 读取指定日期的统计，不存在或格式异常时返回空对象。
      */
     async loadDay(date: string): Promise<DailyStats> {
         const uri = this.dayUri(date);
         try {
             const raw = await vscode.workspace.fs.readFile(uri);
-            return JSON.parse(Buffer.from(raw).toString('utf-8')) as DailyStats;
+            const parsed = JSON.parse(Buffer.from(raw).toString('utf-8'));
+            if (validateDailyStats(parsed)) {
+                return parsed as DailyStats;
+            }
+            console.warn(`[work-time] 损坏的数据文件: ${date}.json，使用空数据`);
         } catch {
-            return this.emptyDay(date);
+            // 文件不存在或 JSON 解析失败
         }
+        return this.emptyDay(date);
     }
 
     /**
@@ -86,17 +91,22 @@ export class Storage {
         const filtered = days.filter(
             (d) => d >= range.start && d <= range.end
         );
-        const results: DailyStats[] = [];
-        for (const d of filtered) {
-            results.push(await this.loadDay(d));
-        }
-        return results;
+        return Promise.all(filtered.map((d) => this.loadDay(d)));
     }
 
     /**
-     * 汇总指定日期范围的全局统计。
+     * 汇总指定日期列表的全局统计。
+     * 接受已加载的 DailyStats 数组，避免重复 IO。
      */
     async summarize(days: string[]): Promise<GlobalStats> {
+        const loaded = await Promise.all(days.map((d) => this.loadDay(d)));
+        return Storage.summarizeLoaded(loaded);
+    }
+
+    /**
+     * 对已加载的 DailyStats 数组执行汇总（纯计算，无 IO）。
+     */
+    static summarizeLoaded(days: DailyStats[]): GlobalStats {
         const projectMap = new Map<
             string,
             { time: number; lines: number }
@@ -111,8 +121,7 @@ export class Storage {
         let totalLinesDeleted = 0;
         let totalCommits = 0;
 
-        for (const date of days) {
-            const day = await this.loadDay(date);
+        for (const day of days) {
             if (!day.totalActiveTime && !day.totalCodingTime) continue;
 
             totalActiveTime += day.totalActiveTime;
@@ -277,20 +286,35 @@ export class Storage {
             commits: [],
             projects: {},
             languages: {},
+            problemCount: 0,
         };
     }
 }
 
-/** 格式化 Date 为 YYYY-MM-DD（UTC+8，与 tracker 层一致）。 */
+/** 格式化 Date 为 YYYY-MM-DD（系统本地时区）。 */
 function fmtDate(d: Date): string {
-    const tz = new Date(d.getTime() + 8 * 3600_000);
-    const y = tz.getUTCFullYear();
-    const m = String(tz.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(tz.getUTCDate()).padStart(2, '0');
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
 }
 
-/** 从时间戳提取 YYYY-MM-DD 日期（UTC+8）。 */
+/** 从时间戳提取 YYYY-MM-DD 日期（系统本地时区）。 */
 function dateFromTimestamp(ts: number): string {
     return fmtDate(new Date(ts));
+}
+
+/** 校验 DailyStats 的基本结构，确保关键字段存在。 */
+function validateDailyStats(data: unknown): boolean {
+    if (!data || typeof data !== 'object') return false;
+    const d = data as Record<string, unknown>;
+    if (typeof d.date !== 'string') return false;
+    if (typeof d.totalActiveTime !== 'number') return false;
+    if (typeof d.totalCodingTime !== 'number') return false;
+    if (typeof d.totalKeystrokes !== 'number') return false;
+    if (typeof d.totalLinesAdded !== 'number') return false;
+    if (typeof d.totalLinesDeleted !== 'number') return false;
+    if (d.projects !== undefined && typeof d.projects !== 'object') return false;
+    if (d.languages !== undefined && typeof d.languages !== 'object') return false;
+    return true;
 }

@@ -16,6 +16,7 @@ export class Reporter {
             linesAdded: d.totalLinesAdded,
             linesDeleted: d.totalLinesDeleted,
             commits: d.commits.length,
+            problemCount: d.problemCount ?? 0,
         }));
     }
 

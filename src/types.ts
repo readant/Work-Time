@@ -66,6 +66,8 @@ export interface DailyStats {
     projects: Record<string, ProjectDailyStats>;
     /** 语言级明细（key = languageId，如 typescript/python） */
     languages: Record<string, FileDailyStats>;
+    /** 当日刷题数量 */
+    problemCount: number;
 }
 
 /**
@@ -105,6 +107,7 @@ export interface DayDataPoint {
     linesAdded: number;
     linesDeleted: number;
     commits: number;
+    problemCount: number;
 }
 
 /**

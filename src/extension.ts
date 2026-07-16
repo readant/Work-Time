@@ -52,7 +52,7 @@ export async function activate(
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
-    const statusBarTimer = setInterval(() => updateStatusBar(), 10_000);
+    const statusBarTimer = setInterval(() => updateStatusBar(), 30_000);
     context.subscriptions.push({
         dispose: () => clearInterval(statusBarTimer),
     });
@@ -157,9 +157,27 @@ export async function activate(
             }
         ),
 
-        // 番茄钟和会话计时器的状态栏项
-        pomodoro.statusBarItem,
-        sessionTimer.statusBarItem
+        // ---- 刷题记录命令 ----
+        vscode.commands.registerCommand(
+            'work-time.recordProblem',
+            async () => {
+                const input = await vscode.window.showInputBox({
+                    prompt: '输入今日刷题数量',
+                    placeHolder: '例如: 3',
+                    validateInput: (v) =>
+                        /^\d+$/.test(v) ? undefined : '请输入正整数',
+                });
+                if (!input) return;
+                const count = parseInt(input, 10);
+                tracker.addProblemCount(count);
+                vscode.window.showInformationMessage(
+                    `已记录 ${count} 道题，今日共 ${tracker.getTodayStats().problemCount} 道`
+                );
+            }
+        ),
+
+        // 注: pomodoro/sessionTimer 的状态栏项由各自的 dispose() 释放，
+        // 此处不 push 到 subscriptions 避免双重 dispose
     );
 }
 
@@ -183,8 +201,16 @@ async function handleShowStats(
     extensionUri: vscode.Uri,
     view: ViewType
 ): Promise<void> {
-    const data = await prepareWebviewData(view);
-    webview.show(extensionUri, view, data);
+    try {
+        console.log('[work-time] handleShowStats called, view=' + view);
+        const data = await prepareWebviewData(view);
+        console.log('[work-time] prepareWebviewData returned, pts=' + (data.dataPoints?.length || 0));
+        webview.show(extensionUri, view, data);
+        console.log('[work-time] webview.show completed');
+    } catch (e: any) {
+        console.error('[work-time] handleShowStats error:', e.message, e.stack);
+        vscode.window.showErrorMessage('Work Time 面板打开失败: ' + e.message);
+    }
 }
 
 async function handleExportReport(): Promise<void> {
@@ -217,7 +243,7 @@ async function handleExportReport(): Promise<void> {
         start: days[0],
         end: days[days.length - 1],
     });
-    const summary = await storage.summarize(days);
+    const summary = Storage.summarizeLoaded(allDays);
     const report = Reporter.generate(allDays, summary, exportFormat);
 
     const extMap: Record<ExportFormat, string> = {
@@ -271,9 +297,7 @@ async function prepareWebviewData(view: ViewType) {
             const range = Storage.getWeekRange();
             const days = await storage.loadRange(range);
             dataPoints = Reporter.toDataPoints(days);
-            summary = await storage.summarize(
-                days.map((d) => d.date)
-            );
+            summary = Storage.summarizeLoaded(days);
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
@@ -281,9 +305,7 @@ async function prepareWebviewData(view: ViewType) {
             const range = Storage.getMonthRange();
             const days = await storage.loadRange(range);
             dataPoints = Reporter.toDataPoints(days);
-            summary = await storage.summarize(
-                days.map((d) => d.date)
-            );
+            summary = Storage.summarizeLoaded(days);
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
@@ -294,24 +316,26 @@ async function prepareWebviewData(view: ViewType) {
                 end: allDays[allDays.length - 1] ?? '2099-12-31',
             });
             dataPoints = Reporter.toDataPoints(days);
-            summary = await storage.summarize(
-                days.map((d) => d.date)
-            );
+            summary = Storage.summarizeLoaded(days);
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
         case 'sessions': {
-            // 加载最近 14 天的会话记录
+            // 加载最近 14 天的会话记录（并行）
             const sDays = await storage.listSessionDays();
             const recent = sDays.slice(-14);
-            const records: SessionRecord[] = [];
-            for (const d of recent) {
-                records.push(...(await storage.loadSessions(d)));
-            }
-            records.sort((a, b) => b.startTime - a.startTime);
-            summary = await storage.summarize(
-                (await storage.listDays()).slice(-30)
+            const sessionArrays = await Promise.all(
+                recent.map((d) => storage.loadSessions(d))
             );
+            const records: SessionRecord[] = sessionArrays.flat();
+            records.sort((a, b) => b.startTime - a.startTime);
+            // 并行加载最近 30 天数据做汇总
+            const last30 = (await storage.listDays()).slice(-30);
+            const recentDays = await storage.loadRange({
+                start: last30[0] ?? '2000-01-01',
+                end: last30[last30.length - 1] ?? '2099-12-31',
+            });
+            summary = Storage.summarizeLoaded(recentDays);
             return {
                 view,
                 state,

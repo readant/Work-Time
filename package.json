@@ -2,7 +2,7 @@
   "name": "work-time",
   "displayName": "Work Time",
   "description": "Track VS Code usage, effective coding time, keystrokes, code changes and project statistics",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "readant",
   "license": "MIT",
   "repository": {
@@ -69,6 +69,11 @@
       {
         "command": "work-time.sessionStop",
         "title": "Stop Session",
+        "category": "Work Time"
+      },
+      {
+        "command": "work-time.recordProblem",
+        "title": "记录刷题数量",
         "category": "Work Time"
       }
     ],
@@ -179,6 +184,8 @@
     "compile": "node esbuild.config.mjs",
     "watch": "node esbuild.config.mjs --watch",
     "lint": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "package": "node esbuild.config.mjs --production && vsce package"
   },
   "devDependencies": {
@@ -186,6 +193,7 @@
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.10"
   }
 }

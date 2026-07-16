@@ -9,14 +9,17 @@ import {
 import { Storage } from './storage';
 import { AdaptiveThreshold } from './adaptive';
 
-/** 日期格式 YYYY-MM-DD（UTC+8）。 */
+/** 日期格式 YYYY-MM-DD（使用系统本地时区）。 */
 function todayString(): string {
-    const now = new Date();
-    const tz = new Date(now.getTime() + 8 * 3600_000);
-    const y = tz.getUTCFullYear();
-    const m = String(tz.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(tz.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return fmtLocalDate(new Date());
+}
+
+/** 格式化 Date 为 YYYY-MM-DD（系统本地时区）。 */
+function fmtLocalDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
 }
 
 /**
@@ -74,6 +77,7 @@ export class CodingTracker {
         this.todayStats = {
             ...loaded,
             commits: loaded.commits ?? [],
+            problemCount: loaded.problemCount ?? 0,
         };
 
         this.updateProject();
@@ -136,6 +140,11 @@ export class CodingTracker {
     /** 暴露活动间隔快照，供外部（如番茄钟）做智能推荐。 */
     getIntervalsSnapshot(): number[] {
         return this.adaptive.getIntervals();
+    }
+
+    /** 记录刷题数量（累加到当日）。 */
+    addProblemCount(count: number): void {
+        this.todayStats.problemCount += count;
     }
 
     getTodayStats(): Readonly<DailyStats> {
@@ -264,6 +273,7 @@ export class CodingTracker {
                 commits: [],
                 projects: {},
                 languages: {},
+                problemCount: 0,
             };
         }
 
@@ -322,7 +332,13 @@ export class CodingTracker {
     }
 
     private recordEdit(e: vscode.TextDocumentChangeEvent): void {
-        if (!this.currentProject || !this.currentFile) return;
+        if (!this.currentProject) return;
+
+        const changedFile = vscode.workspace.asRelativePath(
+            e.document.uri,
+            false
+        );
+        if (!changedFile) return;
 
         let keystrokes = 0;
         let linesAdded = 0;
@@ -338,7 +354,7 @@ export class CodingTracker {
         }
 
         const proj = this.ensureProject(this.currentProject);
-        const file = this.ensureFile(proj, this.currentFile);
+        const file = this.ensureFile(proj, changedFile);
 
         file.keystrokes += keystrokes;
         file.linesAdded += linesAdded;
@@ -350,9 +366,9 @@ export class CodingTracker {
         this.todayStats.totalLinesAdded += linesAdded;
         this.todayStats.totalLinesDeleted += linesDeleted;
 
-        // 语言统计
-        if (this.currentLanguage) {
-            const lang = this.ensureLanguage(this.currentLanguage);
+        const langId = e.document.languageId;
+        if (langId) {
+            const lang = this.ensureLanguage(langId);
             lang.keystrokes += keystrokes;
             lang.linesAdded += linesAdded;
             lang.linesDeleted += linesDeleted;
