@@ -5,6 +5,7 @@ import { StatsWebview } from './webview';
 import { Reporter } from './reporter';
 import { SmartPomodoro } from './tools/pomodoro';
 import { SessionTimer } from './tools/session-timer';
+import { SidebarProvider } from './tools/sidebar';
 import {
     DayDataPoint,
     ExportFormat,
@@ -21,6 +22,7 @@ let webview: StatsWebview;
 let statusBarItem: vscode.StatusBarItem;
 let pomodoro: SmartPomodoro;
 let sessionTimer: SessionTimer;
+let sidebar: SidebarProvider;
 
 /**
  * 扩展激活时调用，VS Code 启动完成后触发（onStartupFinished）。
@@ -42,6 +44,16 @@ export async function activate(
     pomodoro = new SmartPomodoro(tracker);
     sessionTimer = new SessionTimer(tracker, storage);
     sessionTimer.registerEditorListener();
+
+    // 侧边栏 Tree View
+    sidebar = new SidebarProvider(tracker, sessionTimer, storage);
+    const treeView = vscode.window.createTreeView('workTime.sidebar', {
+        treeDataProvider: sidebar,
+        showCollapseAll: false,
+    });
+    sidebar.startAutoRefresh();
+    context.subscriptions.push(treeView);
+    context.subscriptions.push({ dispose: () => sidebar.dispose() });
 
     // 状态栏
     statusBarItem = vscode.window.createStatusBarItem(
@@ -191,6 +203,7 @@ export async function deactivate(): Promise<void> {
     // 番茄钟和会话计时器在 dispose 时自动保存/清理
     pomodoro?.dispose();
     sessionTimer?.dispose();
+    sidebar?.dispose();
     webview.dispose();
     console.log('[work-time] 扩展已停用');
 }

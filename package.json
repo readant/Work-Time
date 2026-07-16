@@ -20,6 +20,23 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "workTime",
+          "title": "Work Time",
+          "icon": "resources/work-time-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "workTime": [
+        {
+          "id": "workTime.sidebar",
+          "name": "Work Time"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "work-time.showStats",

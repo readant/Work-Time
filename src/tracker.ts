@@ -154,40 +154,44 @@ export class CodingTracker {
     // ============ Git 监听 ============
 
     private setupGitWatcher(context: vscode.ExtensionContext): void {
-        const gitExt = vscode.extensions.getExtension('vscode.git');
-        if (!gitExt?.exports) return;
+        try {
+            const gitExt = vscode.extensions.getExtension('vscode.git');
+            if (!gitExt?.exports) return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const api: any = gitExt.exports.getAPI(1);
-        if (!api) return;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const api: any = gitExt.exports.getAPI(1);
+            if (!api) return;
 
-        // 记录当前所有仓库的 HEAD
-        const trackRepo = (repo: any) => {
-            const path = repo.rootUri.fsPath;
-            const hash = repo.state?.HEAD?.commit ?? '';
-            this.lastHeadMap.set(path, hash);
+            // 记录当前所有仓库的 HEAD
+            const trackRepo = (repo: any) => {
+                const path = repo.rootUri.fsPath;
+                const hash = repo.state?.HEAD?.commit ?? '';
+                this.lastHeadMap.set(path, hash);
 
-            try {
-                repo.state?.onDidChange(() => {
-                    this.checkNewCommit(path, repo);
-                });
-            } catch {
-                // onDidChange 可能不可用，回退到不监听
+                try {
+                    repo.state?.onDidChange(() => {
+                        this.checkNewCommit(path, repo);
+                    });
+                } catch {
+                    // onDidChange 可能不可用，回退到不监听
+                }
+            };
+
+            // 已有仓库
+            for (const repo of api.repositories ?? []) {
+                trackRepo(repo);
             }
-        };
 
-        // 已有仓库
-        for (const repo of api.repositories ?? []) {
-            trackRepo(repo);
-        }
-
-        // 新打开的仓库
-        if (typeof api.onDidOpenRepository === 'function') {
-            this.disposables.push(
-                api.onDidOpenRepository((repo: any) => {
-                    trackRepo(repo);
-                })
-            );
+            // 新打开的仓库
+            if (typeof api.onDidOpenRepository === 'function') {
+                this.disposables.push(
+                    api.onDidOpenRepository((repo: any) => {
+                        trackRepo(repo);
+                    })
+                );
+            }
+        } catch {
+            // Git 扩展不可用时静默跳过
         }
     }
 
