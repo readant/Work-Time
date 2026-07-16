@@ -47,8 +47,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a ${{ steps.version.outputs.TAG }} -m "Release ${{ steps.version.outputs.TAG }}"
-          git push origin ${{ steps.version.outputs.TAG }}
+          if ! git rev-parse ${{ steps.version.outputs.TAG }} >/dev/null 2>&1; then
+            git tag -a ${{ steps.version.outputs.TAG }} -m "Release ${{ steps.version.outputs.TAG }}"
+            git push origin ${{ steps.version.outputs.TAG }}
+          else
+            echo "Tag ${{ steps.version.outputs.TAG }} already exists"
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
