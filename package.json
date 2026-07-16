@@ -2,7 +2,7 @@
   "name": "work-time",
   "displayName": "Work Time",
   "description": "Track VS Code usage, effective coding time, keystrokes, code changes and project statistics",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "readant",
   "license": "MIT",
   "repository": {

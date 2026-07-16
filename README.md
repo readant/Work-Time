@@ -8,22 +8,36 @@ VS Code 扩展，自动追踪编辑器使用时长、有效编码时间、按键
 - **三态计时** — 区分"活跃 / 空闲 / 离开"三种状态，确保编码时间的准确性
 - **智能空闲检测** — 支持自定义空闲/离开阈值，内置 P90 自适应算法动态调整
 - **Git 提交关联** — 自动监听 Git 仓库的提交事件，记录每次提交的时间和信息
-- **多维度统计** — 编码时间、活跃时间、按键次数、新增/删除行数，按项目、文件分级汇总
-- **可视化面板** — Webview Panel 提供今日/本周/本月/全部四种视图，含柱状图和项目分布图
+- **多维度统计** — 编码时间、活跃时间、按键次数、新增/删除行数，按项目、文件、语言分级汇总
+- **可视化面板** — Webview Panel 提供今日/本周/本月/全部/会话五种视图，含柱状图、环形图和热力图
+- **热力图日历** — GitHub 风格的编码日历，直观展示每日编码活跃度
 - **多格式导出** — 支持 TXT、Markdown、JSON、CSV 四种格式导出统计报告
 - **数据持久化** — 每日数据独立存储为 JSON 文件，按 YYYY-MM-DD 索引，支持跨日自动归档
+- **智能番茄钟** — 基于用户自适应节奏推荐专注时长，支持自动暂停/恢复
+- **文件会话计时** — 右键文件开始计时，切换编辑器自动暂停，切回自动恢复
+- **侧边栏面板** — Activity Bar 侧边栏显示今日概览、快捷操作和最近会话
+- **刷题记录** — 支持记录每日刷题数量，追踪学习进度
+- **中文本地化** — 命令和 UI 界面全面中文化
 
 ## 架构原理
 
 ```
 src/
-├── extension.ts   # 入口：生命周期管理、命令注册、状态栏
-├── tracker.ts     # 核心追踪引擎
-├── storage.ts     # 数据持久化层
-├── webview.ts     # Webview 面板管理
-├── reporter.ts    # 多格式报告导出
-├── adaptive.ts    # P90 自适应空闲阈值
-└── types.ts       # TypeScript 类型定义
+├── extension.ts        # 入口：生命周期管理、命令注册、状态栏
+├── tracker.ts          # 核心追踪引擎
+├── storage.ts          # 数据持久化层
+├── webview.ts          # Webview 面板管理
+├── reporter.ts         # 多格式报告导出
+├── adaptive.ts         # P90 自适应空闲阈值
+├── types.ts            # TypeScript 类型定义
+├── tools/
+│   ├── pomodoro.ts     # 智能番茄钟
+│   ├── session-timer.ts # 文件会话计时器
+│   └── sidebar.ts      # 侧边栏 Tree View
+├── webview/
+│   ├── main.ts         # Webview 前端逻辑（图表、热力图）
+│   └── styles.ts       # Webview 样式
+└── __tests__/          # 单元测试
 ```
 
 ### 1. 追踪引擎 (`tracker.ts`)
@@ -118,6 +132,7 @@ git clone https://github.com/readant/Work-Time
 cd Work-Time
 npm install
 npm run compile    # 构建到 dist/
+npm test           # 运行单元测试
 ```
 
 在 VS Code 中按 **F5** 启动 Extension Development Host 进行调试。
@@ -131,7 +146,7 @@ npm run package    # 生成 .vsix 安装包
 ### 从 VSIX 安装
 
 ```bash
-code --install-extension work-time-0.1.0.vsix
+code --install-extension work-time-0.3.0.vsix
 ```
 
 或通过 VS Code 扩展面板 → "从 VSIX 安装"。
@@ -157,12 +172,40 @@ code --install-extension work-time-0.1.0.vsix
 - 点击状态栏
 - `Ctrl+Shift+P` → 搜索 "显示编码统计"
 
-面板包含四个视图：
+面板包含五个视图：
 
 - **今日** — 当前自然日的统计数据
 - **本周** — 本周一至周日的汇总
 - **本月** — 本月 1 日至今天/月末的汇总
 - **全部** — 所有历史数据的汇总
+- **会话** — 文件会话计时记录
+
+### 侧边栏
+
+Activity Bar 中的 "Work Time" 侧边栏提供：
+
+- **今日概览** — 状态、编码时间、活跃时间、效率、按键、行变更、提交数
+- **快捷操作** — 开始计时、启动番茄钟、打开统计面板
+- **最近会话** — 最近 5 条文件会话记录
+
+### 智能番茄钟
+
+`Ctrl+Shift+P` → 搜索 "Start Pomodoro" 启动番茄钟：
+
+- 基于用户自适应节奏智能推荐专注时长
+- 状态栏实时显示倒计时和进度条
+- 自动检测离开/返回，暂停/恢复计时
+- 支持短休息和长休息（可配置间隔）
+- 可跳过休息直接开始下一轮专注
+
+### 文件会话计时
+
+右键文件 → "开始计时"：
+
+- 计时器绑定该文件，切换到其他文件自动暂停
+- 切回原文件自动恢复计时
+- 结束时保存会话记录（时长、按键、行变更）
+- 侧边栏显示最近会话记录
 
 ### 导出报告
 
@@ -177,6 +220,13 @@ code --install-extension work-time-0.1.0.vsix
 | `workTime.idleTimeout` | number | 300 | 空闲检测阈值（秒），无操作超过此时间进入 idle 状态 |
 | `workTime.afkTimeout` | number | 600 | 离开检测阈值（秒），无操作超过此时间进入 away 状态，停止计时 |
 | `workTime.dataDir` | string | "" | 自定义数据存储目录，留空使用 VS Code 全局存储路径 |
+| `workTime.pomodoro.focusDuration` | number | 1500 | 专注时长（秒），默认 1500 = 25 分钟 |
+| `workTime.pomodoro.shortBreakDuration` | number | 300 | 短休息时长（秒），默认 300 = 5 分钟 |
+| `workTime.pomodoro.longBreakDuration` | number | 900 | 长休息时长（秒），默认 900 = 15 分钟 |
+| `workTime.pomodoro.longBreakInterval` | number | 4 | 几次专注后进入长休息 |
+| `workTime.pomodoro.autoStartBreak` | boolean | false | 专注结束时是否自动开始休息 |
+| `workTime.pomodoro.autoStartFocus` | boolean | false | 休息结束时是否自动开始下一轮专注 |
+| `workTime.pomodoro.enableSmartRecommend` | boolean | true | 启用在自适应阈值基础上智能推荐专注时长 |
 
 > **注意**：启用自适应阈值后，`idleTimeout` 和 `afkTimeout` 会被算法自动调整。如需固定阈值，可将阈值设为极值（如 9999 秒）来禁用自适应效果。
 
@@ -186,7 +236,8 @@ code --install-extension work-time-0.1.0.vsix
 - esbuild（零运行时依赖的单文件打包）
 - VS Code Extension API（^1.85.0）
 - VS Code Git Extension API（提交监听）
-- 纯 Canvas / CSS（Webview 图表）
+- 纯 Canvas / CSS（Webview 图表、热力图）
+- Vitest（单元测试框架）
 
 ## 许可
 
