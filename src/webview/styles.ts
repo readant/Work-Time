@@ -28,6 +28,33 @@ body{
   background:var(--vscode-toolbar-hoverBackground,rgba(255,255,255,.06));
 }
 
+/* ===== 年度选择器 ===== */
+.year-selector{
+  display:flex;align-items:center;gap:8px;margin-bottom:20px;
+}
+.year-label{
+  font-size:12px;color:var(--vscode-descriptionForeground,#999);
+  padding:6px 0;
+}
+.year-buttons{
+  display:flex;gap:4px;
+}
+.year-btn{
+  padding:5px 14px;border-radius:16px;font-size:12px;
+  border:1px solid var(--vscode-panel-border,#444);
+  background:transparent;color:var(--vscode-foreground,#ccc);
+  cursor:pointer;transition:all .15s;
+}
+.year-btn:hover{
+  background:var(--vscode-toolbar-hoverBackground,rgba(255,255,255,.08));
+  border-color:var(--vscode-descriptionForeground,#999);
+}
+.year-btn.active{
+  background:var(--vscode-button-background,#0e639c);
+  color:var(--vscode-button-foreground,#fff);
+  border-color:var(--vscode-button-background,#0e639c);
+}
+
 /* ===== 状态条 ===== */
 .status-bar{
   display:flex;align-items:center;gap:8px;margin-bottom:20px;
@@ -73,7 +100,10 @@ body{
 }
 .chart-row{display:flex;gap:18px;flex-wrap:wrap}
 .chart-row .chart-box{flex:1;min-width:280px}
-canvas{display:block;max-width:100%}
+.canvas-wrap{width:100%;overflow:hidden}
+.canvas-wrap canvas{display:block;width:100%;height:auto}
+.canvas-wrap-sq{width:100%;max-width:260px;margin:0 auto;aspect-ratio:1;overflow:hidden}
+.canvas-wrap-sq canvas{display:block;width:100%;height:100%}
 
 /* ===== 图例 ===== */
 .legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;font-size:11px}

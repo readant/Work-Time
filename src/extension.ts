@@ -82,6 +82,11 @@ export async function activate(
                 handleShowStats(context.extensionUri, view)
         ),
         vscode.commands.registerCommand(
+            'work-time.webviewSwitchYear',
+            (year: number) =>
+                handleShowStats(context.extensionUri, 'all', year)
+        ),
+        vscode.commands.registerCommand(
             'work-time.exportReport',
             handleExportReport
         ),
@@ -212,11 +217,12 @@ export async function deactivate(): Promise<void> {
 
 async function handleShowStats(
     extensionUri: vscode.Uri,
-    view: ViewType
+    view: ViewType,
+    year?: number
 ): Promise<void> {
     try {
-        console.log('[work-time] handleShowStats called, view=' + view);
-        const data = await prepareWebviewData(view);
+        console.log('[work-time] handleShowStats called, view=' + view + (year ? ', year=' + year : ''));
+        const data = await prepareWebviewData(view, year);
         console.log('[work-time] prepareWebviewData returned, pts=' + (data.dataPoints?.length || 0));
         webview.show(extensionUri, view, data);
         console.log('[work-time] webview.show completed');
@@ -287,19 +293,40 @@ async function handleExportReport(): Promise<void> {
 
 // ============ Webview 数据准备 ============
 
-async function prepareWebviewData(view: ViewType) {
+async function prepareWebviewData(view: ViewType, year?: number) {
     const todayStats = tracker.getTodayStats();
     const state = tracker.getState();
+    const selectedYear = year ?? new Date().getFullYear();
 
     let dataPoints: DayDataPoint[] = [];
+    let heatmapDataPoints: DayDataPoint[] = [];
     let summary = null;
     let commits = todayStats.commits ?? [];
     let adaptiveNote = '';
+    let availableYears: number[] = [];
+
+    // 获取可用年份列表和热力图数据
+    const allDaysList = await storage.listDays();
+    if (allDaysList.length > 0) {
+        const yearSet = new Set<number>();
+        for (const d of allDaysList) {
+            yearSet.add(parseInt(d.slice(0, 4)));
+        }
+        availableYears = Array.from(yearSet).sort((a, b) => b - a);
+
+        // 热力图始终加载全部历史数据
+        const allDaysData = await storage.loadRange({
+            start: allDaysList[0],
+            end: allDaysList[allDaysList.length - 1],
+        });
+        heatmapDataPoints = Reporter.toDataPoints(allDaysData);
+    }
 
     switch (view) {
         case 'today': {
             dataPoints = Reporter.toDataPoints([todayStats]);
-            // 自适应提示
+            // 今日趋势：按小时聚合
+            dataPoints = aggregateByHour(todayStats);
             const cfg = vscode.workspace.getConfiguration('workTime');
             const idle = cfg.get<number>('idleTimeout', 300);
             adaptiveNote =
@@ -317,24 +344,23 @@ async function prepareWebviewData(view: ViewType) {
         case 'month': {
             const range = Storage.getMonthRange();
             const days = await storage.loadRange(range);
-            dataPoints = Reporter.toDataPoints(days);
+            // 月趋势：按周聚合
+            dataPoints = aggregateByWeek(days);
             summary = Storage.summarizeLoaded(days);
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
         case 'all': {
-            const allDays = await storage.listDays();
-            const days = await storage.loadRange({
-                start: allDays[0] ?? '2000-01-01',
-                end: allDays[allDays.length - 1] ?? '2099-12-31',
-            });
-            dataPoints = Reporter.toDataPoints(days);
+            // 全部视图：指定年度每月汇总
+            const yearStart = `${selectedYear}-01-01`;
+            const yearEnd = `${selectedYear}-12-31`;
+            const days = await storage.loadRange({ start: yearStart, end: yearEnd });
+            dataPoints = aggregateByMonth(days);
             summary = Storage.summarizeLoaded(days);
             commits = days.flatMap((d) => d.commits ?? []);
             break;
         }
         case 'sessions': {
-            // 加载最近 14 天的会话记录（并行）
             const sDays = await storage.listSessionDays();
             const recent = sDays.slice(-14);
             const sessionArrays = await Promise.all(
@@ -342,7 +368,6 @@ async function prepareWebviewData(view: ViewType) {
             );
             const records: SessionRecord[] = sessionArrays.flat();
             records.sort((a, b) => b.startTime - a.startTime);
-            // 并行加载最近 30 天数据做汇总
             const last30 = (await storage.listDays()).slice(-30);
             const recentDays = await storage.loadRange({
                 start: last30[0] ?? '2000-01-01',
@@ -354,11 +379,14 @@ async function prepareWebviewData(view: ViewType) {
                 state,
                 todayStats,
                 summary,
-                dataPoints,
+                dataPoints: [],
+                heatmapDataPoints,
                 commits,
                 adaptiveNote,
                 theme: getThemeInfo(),
                 sessionRecords: records,
+                years: availableYears,
+                year: selectedYear,
             };
         }
     }
@@ -369,9 +397,12 @@ async function prepareWebviewData(view: ViewType) {
         todayStats,
         summary,
         dataPoints,
+        heatmapDataPoints,
         commits,
         adaptiveNote,
         theme: getThemeInfo(),
+        years: availableYears,
+        year: selectedYear,
     };
 }
 
@@ -413,4 +444,130 @@ function fmtShort(seconds: number): string {
     const m = Math.floor((seconds % 3600) / 60);
     if (h > 0) return `${h}h${m}m`;
     return `${m}m`;
+}
+
+// ============ 数据聚合 ============
+
+/** 今日趋势：将单日数据按小时聚合为 24 个数据点。 */
+function aggregateByHour(today: DailyStats): DayDataPoint[] {
+    // 使用 commits 的时间戳来估算每小时分布
+    const hourMap = new Map<number, { codingTime: number; keystrokes: number; linesAdded: number; linesDeleted: number; commits: number }>();
+    for (let h = 0; h < 24; h++) {
+        hourMap.set(h, { codingTime: 0, keystrokes: 0, linesAdded: 0, linesDeleted: 0, commits: 0 });
+    }
+
+    // 按 commits 时间分布编码时间
+    const commits = today.commits ?? [];
+    const totalCoding = today.totalCodingTime;
+    const commitHours = new Map<number, number>();
+    for (const c of commits) {
+        const h = new Date(c.timestamp).getHours();
+        commitHours.set(h, (commitHours.get(h) ?? 0) + 1);
+    }
+
+    // 如果有提交记录，按提交分布时间；否则均匀分布
+    const totalCommitsInDay = commits.length;
+    if (totalCommitsInDay > 0) {
+        for (const [h, count] of commitHours) {
+            const ratio = count / totalCommitsInDay;
+            const entry = hourMap.get(h)!;
+            entry.codingTime = Math.round(totalCoding * ratio);
+            entry.commits = count;
+        }
+    } else {
+        // 无提交时，假设编码时间集中在 9-18 点
+        const activeHours = [9, 10, 11, 13, 14, 15, 16, 17];
+        const perHour = Math.round(totalCoding / activeHours.length);
+        for (const h of activeHours) {
+            hourMap.get(h)!.codingTime = perHour;
+        }
+    }
+
+    return Array.from(hourMap.entries()).map(([h, v]) => ({
+        date: `${String(h).padStart(2, '0')}:00`,
+        codingTime: v.codingTime,
+        activeTime: v.codingTime,
+        keystrokes: v.keystrokes,
+        linesAdded: v.linesAdded,
+        linesDeleted: v.linesDeleted,
+        commits: v.commits,
+        problemCount: 0,
+    }));
+}
+
+/** 将多日数据按月聚合。 */
+function aggregateByMonth(days: DailyStats[]): DayDataPoint[] {
+    const monthMap = new Map<number, DayDataPoint>();
+
+    for (let m = 1; m <= 12; m++) {
+        monthMap.set(m, {
+            date: `${m}月`,
+            codingTime: 0,
+            activeTime: 0,
+            keystrokes: 0,
+            linesAdded: 0,
+            linesDeleted: 0,
+            commits: 0,
+            problemCount: 0,
+        });
+    }
+
+    for (const day of days) {
+        const d = new Date(day.date);
+        const month = d.getMonth() + 1;
+        const entry = monthMap.get(month)!;
+        entry.codingTime += day.totalCodingTime;
+        entry.activeTime += day.totalActiveTime;
+        entry.keystrokes += day.totalKeystrokes;
+        entry.linesAdded += day.totalLinesAdded;
+        entry.linesDeleted += day.totalLinesDeleted;
+        entry.commits += (day.commits ?? []).length;
+        entry.problemCount += day.problemCount ?? 0;
+    }
+
+    // 只返回有数据的月份（当前月之前）+ 当前月
+    const currentMonth = new Date().getMonth() + 1;
+    return Array.from(monthMap.entries())
+        .filter(([m]) => m <= currentMonth)
+        .map(([, v]) => v);
+}
+
+/** 将多日数据按周聚合。 */
+function aggregateByWeek(days: DailyStats[]): DayDataPoint[] {
+    const weekMap = new Map<string, DayDataPoint>();
+
+    for (const day of days) {
+        const d = new Date(day.date);
+        // 获取该周的周一作为 key
+        const dayOfWeek = d.getDay();
+        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(d);
+        monday.setDate(d.getDate() + mondayOffset);
+        const weekKey = monday.toISOString().slice(0, 10);
+
+        if (!weekMap.has(weekKey)) {
+            const month = monday.getMonth() + 1;
+            const weekOfMonth = Math.ceil(monday.getDate() / 7);
+            weekMap.set(weekKey, {
+                date: `${month}月W${weekOfMonth}`,
+                codingTime: 0,
+                activeTime: 0,
+                keystrokes: 0,
+                linesAdded: 0,
+                linesDeleted: 0,
+                commits: 0,
+                problemCount: 0,
+            });
+        }
+        const w = weekMap.get(weekKey)!;
+        w.codingTime += day.totalCodingTime;
+        w.activeTime += day.totalActiveTime;
+        w.keystrokes += day.totalKeystrokes;
+        w.linesAdded += day.totalLinesAdded;
+        w.linesDeleted += day.totalLinesDeleted;
+        w.commits += (day.commits ?? []).length;
+        w.problemCount += day.problemCount ?? 0;
+    }
+
+    return Array.from(weekMap.values());
 }

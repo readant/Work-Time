@@ -16,10 +16,13 @@ interface WebviewData {
     todayStats: DailyStats;
     summary: GlobalStats | null;
     dataPoints: DayDataPoint[];
+    heatmapDataPoints: DayDataPoint[];
     commits: CommitRecord[];
     adaptiveNote: string;
     theme?: { kind: number; isDark: boolean };
     sessionRecords?: SessionRecord[];
+    years?: number[];
+    year?: number;
 }
 
 /**
@@ -59,11 +62,16 @@ export class StatsWebview {
         }
 
         this.panel.webview.onDidReceiveMessage(
-            (msg: { type: string; view?: ViewType }) => {
+            (msg: { type: string; view?: ViewType; year?: number }) => {
                 if (msg.type === 'switchView' && msg.view) {
                     vscode.commands.executeCommand(
                         'work-time.webviewSwitchView',
                         msg.view
+                    );
+                } else if (msg.type === 'switchYear' && msg.year) {
+                    vscode.commands.executeCommand(
+                        'work-time.webviewSwitchYear',
+                        msg.year
                     );
                 }
             },
@@ -98,10 +106,13 @@ export class StatsWebview {
             todayStats: data.todayStats,
             summary: data.summary,
             dataPoints: data.dataPoints,
+            heatmapDataPoints: data.heatmapDataPoints,
             commits: data.commits,
             adaptiveNote: data.adaptiveNote,
             theme: data.theme,
             sessionRecords: data.sessionRecords,
+            years: data.years,
+            year: data.year,
         });
     }
 
@@ -122,6 +133,10 @@ export class StatsWebview {
   <button class="tab" data-view="month">本月</button>
   <button class="tab" data-view="all">全部</button>
   <button class="tab" data-view="sessions">会话</button>
+</div>
+<div id="yearSelector" class="year-selector" style="display:none">
+  <span class="year-label">年度:</span>
+  <div id="yearButtons" class="year-buttons"></div>
 </div>
 <div id="statusBar" class="status-bar"></div>
 <div class="cards" id="cards"></div>
@@ -150,6 +165,7 @@ const WEBVIEW_SCRIPT = `
 const vscode = acquireVsCodeApi();
 let currentView = 'today';
 let isDark = true;
+let currentYear = new Date().getFullYear();
 
 const PALETTE = ['#4fc3f7','#81c784','#ffb74d','#e57373','#ba68c8','#4dd0e1','#aed581','#ff8a65','#9575cd','#f06292'];
 
@@ -172,6 +188,7 @@ function fmtTimeRange(start, end) {
   return pad(s.getHours())+':'+pad(s.getMinutes())+' - '+pad(e.getHours())+':'+pad(e.getMinutes());
 }
 
+// 标签切换
 document.querySelectorAll('.tab').forEach(el => {
   el.addEventListener('click', () => {
     const v = el.dataset.view;
@@ -184,11 +201,34 @@ window.addEventListener('message', e => {
   if (m.type !== 'data') return;
   currentView = m.view;
   if (m.theme) isDark = m.theme.isDark;
+  if (m.year) currentYear = m.year;
+  if (m.years) initYearSelector(m.years);
   render(m);
 });
 
+function initYearSelector(years) {
+  const btns = document.getElementById('yearButtons');
+  const container = document.getElementById('yearSelector');
+  if (!btns || !container) return;
+  if (!years || years.length === 0) { container.style.display = 'none'; return; }
+  btns.innerHTML = years.map(y => '<button class="year-btn'+(y===currentYear?' active':'')+'" data-year="'+y+'">'+y+'</button>').join('');
+  container.style.display = currentView === 'all' ? 'flex' : 'none';
+  btns.querySelectorAll('.year-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const y = parseInt(btn.dataset.year);
+      if (y !== currentYear) {
+        currentYear = y;
+        btns.querySelectorAll('.year-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.year) === y));
+        vscode.postMessage({type:'switchYear', year: y});
+      }
+    });
+  });
+}
+
 function render(d) {
   document.querySelectorAll('.tab').forEach(el => { el.classList.toggle('active', el.dataset.view === d.view); });
+  const yearSel = document.getElementById('yearSelector');
+  if (yearSel) yearSel.style.display = d.view === 'all' ? 'flex' : 'none';
   const s = d.view === 'today' ? d.todayStats : (d.summary || {});
   const total = s.totalCodingTime || 0;
   const labels = {active:'活跃',idle:'空闲',away:'离开'};
@@ -212,20 +252,25 @@ function renderCharts(d) {
   const el = document.getElementById('charts');
   if (d.view === 'sessions') { el.innerHTML = ''; renderSessions(d.sessionRecords || []); return; }
   const colors = getChartColors();
-  const pts = d.dataPoints || [], summary = d.summary, today = d.todayStats;
+  const pts = d.dataPoints || [], heatPts = d.heatmapDataPoints || [];
+  const summary = d.summary, today = d.todayStats;
+
+  const barTitles = {today:'每小时编码趋势',week:'每日编码趋势',month:'每周编码趋势',all:'每日编码趋势'};
+  const barTitle = barTitles[d.view] || '编码趋势';
+
   let html = '';
-  if (pts.length >= 1 || d.view !== 'today') html += '<div class="chart-box"><div class="chart-title">编码日历</div><canvas id="heatmap" width="720" height="140"></canvas><div class="legend" id="legendHeat"></div></div>';
-  if (pts.length > 0) html += '<div class="chart-box"><div class="chart-title">每日编码趋势</div><canvas id="barChart" width="700" height="240"></canvas></div>';
+  if (heatPts.length >= 1) html += '<div class="chart-box"><div class="chart-title">编码日历</div><div class="canvas-wrap"><canvas id="heatmap"></canvas></div><div class="legend" id="legendHeat"></div></div>';
+  if (pts.length > 0) html += '<div class="chart-box"><div class="chart-title">'+barTitle+'</div><div class="canvas-wrap"><canvas id="barChart"></canvas></div></div>';
   else html += '<div class="chart-box"><div class="note-empty">暂无数据</div></div>';
   if (summary && summary.topProjects && summary.topProjects.length > 0) {
-    html += '<div class="chart-row"><div class="chart-box"><div class="chart-title">项目分布</div><canvas id="donutProject" width="260" height="260"></canvas><div class="legend" id="legendProject"></div></div>';
-    if (summary.topLanguages && summary.topLanguages.length > 0) html += '<div class="chart-box"><div class="chart-title">语言分布</div><canvas id="donutLang" width="260" height="260"></canvas><div class="legend" id="legendLang"></div></div>';
-    if (d.view === 'today') html += '<div class="chart-box"><div class="chart-title">活跃状态</div><canvas id="donutState" width="260" height="260"></canvas><div class="legend" id="legendState"></div></div>';
+    html += '<div class="chart-row"><div class="chart-box"><div class="chart-title">项目分布</div><div class="canvas-wrap-sq"><canvas id="donutProject"></canvas></div><div class="legend" id="legendProject"></div></div>';
+    if (summary.topLanguages && summary.topLanguages.length > 0) html += '<div class="chart-box"><div class="chart-title">语言分布</div><div class="canvas-wrap-sq"><canvas id="donutLang"></canvas></div><div class="legend" id="legendLang"></div></div>';
+    if (d.view === 'today') html += '<div class="chart-box"><div class="chart-title">活跃状态</div><div class="canvas-wrap-sq"><canvas id="donutState"></canvas></div><div class="legend" id="legendState"></div></div>';
     html += '</div>';
   }
   el.innerHTML = html;
-  if (pts.length >= 1 || d.view !== 'today') drawHeatmap('heatmap', pts, colors);
-  if (pts.length > 0) drawBarChart('barChart', pts, colors);
+  if (heatPts.length >= 1) drawHeatmap('heatmap', heatPts, colors);
+  if (pts.length > 0) drawBarChart('barChart', pts, colors, d.view);
   if (summary && summary.topProjects && summary.topProjects.length > 0) {
     drawDonut('donutProject', summary.topProjects.map(p => ({label:p.name,value:p.time})), colors, '项目');
     if (summary.topLanguages && summary.topLanguages.length > 0) {
@@ -241,27 +286,38 @@ function renderCharts(d) {
 
 function drawDonut(id, items, colors, centerLabel) {
   const c = document.getElementById(id); if (!c) return;
-  const W = c.width, H = c.height, cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 16, ir = r * 0.6;
+  const rect = c.parentElement.getBoundingClientRect();
+  const size = Math.min(rect.width, rect.height) || 260;
+  const dpr = window.devicePixelRatio || 1;
+  c.width = size * dpr; c.height = size * dpr;
+  c.style.width = size + 'px'; c.style.height = size + 'px';
+  const W = c.width, H = c.height;
+  const cx = W/2, cy = H/2, r = Math.min(W,H)/2 - 16*dpr, ir = r * 0.6;
   const total = items.reduce((s,i) => s + (i.value||0), 0);
-  const ctx = c.getContext('2d'); ctx.clearRect(0,0,W,H);
-  if (total === 0) { ctx.fillStyle = colors.text; ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('暂无数据', cx, cy); return; }
+  const ctx = c.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0,0,W,H);
+  const sW = size, sH = size, scx = sW/2, scy = sH/2, sr = Math.min(sW,sH)/2 - 16, sir = sr * 0.6;
+  if (total === 0) { ctx.fillStyle = colors.text; ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('暂无数据', scx, scy); return; }
   let angle = -Math.PI / 2;
   items.forEach((item, i) => {
     const slice = (item.value / total) * Math.PI * 2; if (slice <= 0) return;
-    ctx.beginPath(); ctx.arc(cx, cy, r, angle, angle + slice); ctx.arc(cx, cy, ir, angle + slice, angle, true); ctx.closePath();
+    ctx.beginPath(); ctx.arc(scx, scy, sr, angle, angle + slice); ctx.arc(scx, scy, sir, angle + slice, angle, true); ctx.closePath();
     ctx.fillStyle = item.color || PALETTE[i % PALETTE.length]; ctx.fill(); ctx.strokeStyle = colors.bg; ctx.lineWidth = 2; ctx.stroke(); angle += slice;
   });
-  ctx.fillStyle = colors.text; ctx.textAlign = 'center'; ctx.font = '11px sans-serif'; ctx.fillText(centerLabel, cx, cy - 7);
-  ctx.fillStyle = isDark ? '#eee' : '#333'; ctx.font = 'bold 16px sans-serif'; ctx.fillText(fmtDuration(total), cx, cy + 12);
+  ctx.fillStyle = colors.text; ctx.textAlign = 'center'; ctx.font = '11px sans-serif'; ctx.fillText(centerLabel, scx, scy - 7);
+  ctx.fillStyle = isDark ? '#eee' : '#333'; ctx.font = 'bold 16px sans-serif'; ctx.fillText(fmtDuration(total), scx, scy + 12);
   const lm = {donutProject:'legendProject',donutLang:'legendLang',donutState:'legendState'};
   const le = document.getElementById(lm[id] || '');
   if (le) le.innerHTML = items.map((item, i) => { const pct = total > 0 ? Math.round((item.value / total) * 100) : 0; return '<div class="legend-item"><div class="legend-dot" style="background:'+(item.color||PALETTE[i%PALETTE.length])+'"></div><span class="legend-name">'+item.label+'</span><span class="legend-val">'+fmtDuration(item.value)+' ('+pct+'%)</span></div>'; }).join('');
 }
 
-function drawBarChart(id, pts, colors) {
+function drawBarChart(id, pts, colors, view) {
   const c = document.getElementById(id); if (!c) return;
-  const W = c.width = Math.max(500, c.parentElement?.clientWidth || 700), H = c.height = 240;
-  const ctx = c.getContext('2d'); ctx.clearRect(0,0,W,H); if (!pts.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.parentElement.getBoundingClientRect();
+  const W = rect.width || 700, H = 240;
+  c.width = W * dpr; c.height = H * dpr;
+  c.style.width = W + 'px'; c.style.height = H + 'px';
+  const ctx = c.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0,0,W,H); if (!pts.length) return;
   const pad = {top:10,right:24,bottom:36,left:44}, cw = W - pad.left - pad.right, ch = H - pad.top - pad.bottom;
   const maxVal = Math.max(...pts.map(p => p.codingTime), 1), barW = Math.min(32, Math.max(6, (cw / pts.length) * 0.6)), gap = (cw - barW * pts.length) / (pts.length + 1);
   ctx.strokeStyle = colors.grid; ctx.lineWidth = 0.5; ctx.fillStyle = colors.text; ctx.font = '10px sans-serif'; ctx.textAlign = 'right';
@@ -271,12 +327,15 @@ function drawBarChart(id, pts, colors) {
   pts.forEach((p, i) => { const x = pad.left + gap + barW/2 + i * (barW + gap), y = pad.top + ch - (ma[i] / maxVal) * ch; if (first) { ctx.moveTo(x, y); first = false; } else ctx.lineTo(x, y); }); ctx.stroke();
   const avg = pts.reduce((s,p) => s + p.codingTime, 0) / pts.length, avgY = pad.top + ch - (avg / maxVal) * ch;
   ctx.beginPath(); ctx.strokeStyle = colors.text; ctx.lineWidth = 1; ctx.setLineDash([4,4]); ctx.moveTo(pad.left, avgY); ctx.lineTo(W - pad.right, avgY); ctx.stroke(); ctx.setLineDash([]);
+
+  const todayStr = new Date().toISOString().slice(5,10);
   pts.forEach((p, i) => {
     const x = pad.left + gap + i * (barW + gap), h = (p.codingTime / maxVal) * ch, y = pad.top + ch - h, r = Math.min(4, barW/2);
     const grad = ctx.createLinearGradient(x, y, x, pad.top + ch); grad.addColorStop(0, colors.blue); grad.addColorStop(0.5, colors.bar); grad.addColorStop(1, isDark ? 'rgba(79,195,247,.15)' : 'rgba(25,118,210,.1)'); ctx.fillStyle = grad;
     ctx.beginPath(); ctx.moveTo(x, pad.top + ch); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.lineTo(x + barW - r, y); ctx.quadraticCurveTo(x + barW, y, x + barW, y + r); ctx.lineTo(x + barW, pad.top + ch); ctx.closePath(); ctx.fill();
-    const label = p.date.length >= 10 ? p.date.slice(5) : p.date, today = new Date().toISOString().slice(5,10);
-    ctx.fillStyle = label === today ? '#4fc3f7' : colors.text; ctx.font = (label === today ? 'bold ' : '') + '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, x + barW/2, H - 8);
+    let label = p.date;
+    const isToday = label === todayStr || label === todayStr.slice(5);
+    ctx.fillStyle = isToday ? '#4fc3f7' : colors.text; ctx.font = (isToday ? 'bold ' : '') + '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, x + barW/2, H - 8);
   });
 }
 
@@ -284,8 +343,12 @@ function roundRectPath(ctx, x, y, w, h, r) { ctx.moveTo(x+r,y); ctx.lineTo(x+w-r
 
 function drawHeatmap(id, pts, colors) {
   const c = document.getElementById(id); if (!c) return;
-  const W = c.width = Math.max(720, c.parentElement.clientWidth || 720), H = c.height = 140;
-  const ctx = c.getContext('2d'); ctx.clearRect(0, 0, W, H);
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.parentElement.getBoundingClientRect();
+  const W = rect.width || 720, H = 140;
+  c.width = W * dpr; c.height = H * dpr;
+  c.style.width = W + 'px'; c.style.height = H + 'px';
+  const ctx = c.getContext('2d'); ctx.scale(dpr, dpr); ctx.clearRect(0, 0, W, H);
   const dataMap = {}; pts.forEach(p => { dataMap[p.date] = p.codingTime; });
   const now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth(), currentDay = now.getDate();
   const todayStr = currentYear + '-' + String(currentMonth + 1).padStart(2, '0') + '-' + String(currentDay).padStart(2, '0');
